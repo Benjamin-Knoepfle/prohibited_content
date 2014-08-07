@@ -68,7 +68,10 @@ for message in messages:
         channel = channels.next()
         channel.send( message )
 
-train_data_sets=[]
+
+feature_index = {}
+item_ids = []
+train_data = pc.tidy_data( [], [], feature_index = feature_index )
 train_label_sets=[]
 
 
@@ -77,17 +80,19 @@ for i in range( len( messages ) ):
         channel, serialized_data = queue.get( )
         print "Split number " +str(i)+ " received"
         if serialized_data == -1: print "Error with data;" 
-        train_data, labels = pickle.loads( serialized_data )
-        train_data_sets.append( train_data )
-        train_label_sets.append( labels )
+        data, labels = pickle.loads( serialized_data )
+        item_id, train_feat, train_labels = pc.tidy_data( [data], [labels], feature_index = feature_index )
+        item_ids.extend( item_id )
+        print train_data
+        print train_feat
+        train_data = pc.csr_vappend( train_data, train_feat )
+        labels.extend( train_labels )
   
 #train_data, labels = pc.preprocess_data2( file_path+train_file_name, range(sample_size), targets=True )
 
-print "tidy data"
-feature_index = {}
-item_ids, train_feat, labels = pc.tidy_data( train_data_sets, train_label_sets, feature_index = feature_index )
 
-train_set, test_set, evaluation_set = pc.create_train_sets( train_feat, labels, train_frc=1, test_frc=0, evaluation_frq=0, method='simple' )
+
+train_set, test_set, evaluation_set = pc.create_train_sets( train_data, labels, train_frc=1, test_frc=0, evaluation_frq=0, method='simple' )
 
 print "train classifier"
 clf = svm.SVC()
@@ -112,6 +117,7 @@ print "preprocess test"
 
 print "calculate number of splits for test_data"
 num_splits = test_max_samples/sample_size +1
+#num_splits = 5
 print str(num_splits) + " splits needed for sample_size " + str(sample_size)
 
 messages = []
@@ -127,7 +133,8 @@ for message in messages:
         channel = channels.next()
         channel.send( message )
 
-test_data_sets=[]
+item_ids = []
+test_features = []
 
 
 print "receive data"
@@ -136,17 +143,24 @@ for i in range( len( messages ) ):
         print "Split number " +str(i)+ " received"
         if serialized_data == -1: print "Error with data;" 
         test_data = pickle.loads( serialized_data )
-        test_data_sets.append( test_data )
+        item_id, test_feat = pc.tidy_data( [test_data], feature_index = feature_index )
+        item_ids.extend( item_id )
+        print "tidy data"
+        test_features.append( test_feat )
+        
 
 
 group.terminate()
 #test_data = pc.preprocess_data2( file_path+test_file_name, range(sample_size), targets=False )
 
-print "tidy data"
-item_ids, test_feat = pc.tidy_data( test_data_sets, feature_index = feature_index )
 
 print "classify"
-predicted_scores = clf.predict( test_feat )
+predicted_scores = []
+for features in test_features:
+        print "set classified"
+        predicted_scores.extend( clf.predict( test_feat ) )
+print "done classifying"
+
 
 solution =  pc.sort_solution( item_ids, predicted_scores )
 
