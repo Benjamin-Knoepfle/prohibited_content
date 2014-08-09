@@ -188,15 +188,18 @@ def tidy_data( data_list, label_list=[], feature_index = {} ):
                 return item_ids, features
                         
 def csr_vappend(a,b):
-    """ Takes in 2 csr_matrices and appends the second one to the bottom of the first one. 
-    Much faster than scipy.sparse.vstack but assumes the type to be csr and overwrites
-    the first matrix instead of copying it. The data, indices, and indptr still get copied."""
+    	""" Takes in 2 csr_matrices and appends the second one to the bottom of the first one. 
+    	Much faster than scipy.sparse.vstack but assumes the type to be csr and overwrites
+    	the first matrix instead of copying it. The data, indices, and indptr still get copied."""
 
-    a.data = np.hstack((a.data,b.data))
-    a.indices = np.hstack((a.indices,b.indices))
-    a.indptr = np.hstack((a.indptr,(b.indptr + a.nnz)[1:]))
-    a._shape = (a.shape[0]+b.shape[0],b.shape[1])
-    return a
+	if a==None:
+		return b
+
+    	a.data = np.hstack((a.data,b.data))
+    	a.indices = np.hstack((a.indices,b.indices))
+    	a.indptr = np.hstack((a.indptr,(b.indptr + a.nnz)[1:]))
+    	a._shape = (a.shape[0]+b.shape[0],b.shape[1])
+    	return a
 
 
 def create_train_sets( data, labels, train_frc=1, test_frc=0, evaluation_frq=0, method='simple' ):

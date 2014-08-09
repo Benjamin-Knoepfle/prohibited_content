@@ -22,7 +22,7 @@ test_file_name = 'avito_test.tsv'
 train_max_samples = 3995802
 test_max_samples = 1351242
 
-sample_size = 5000
+sample_size = 50000
 
 
 #train
@@ -53,7 +53,7 @@ mch = execnet.MultiChannel( [ channel1, channel2, channel3 ] )
 queue = mch.make_receive_queue( endmarker=-1 )
 channels = itertools.cycle( mch )
 
-num_splits = 3
+num_splits = 10
 
 messages = []
 for i in range( num_splits ):
@@ -71,7 +71,7 @@ for message in messages:
 
 feature_index = {}
 item_ids = []
-train_data = pc.tidy_data( [], [], feature_index = feature_index )
+train_data = None
 train_label_sets=[]
 
 
@@ -83,16 +83,14 @@ for i in range( len( messages ) ):
         data, labels = pickle.loads( serialized_data )
         item_id, train_feat, train_labels = pc.tidy_data( [data], [labels], feature_index = feature_index )
         item_ids.extend( item_id )
-        print train_data
-        print train_feat
         train_data = pc.csr_vappend( train_data, train_feat )
-        labels.extend( train_labels )
+        train_label_sets.extend( train_labels )
   
 #train_data, labels = pc.preprocess_data2( file_path+train_file_name, range(sample_size), targets=True )
 
 
 
-train_set, test_set, evaluation_set = pc.create_train_sets( train_data, labels, train_frc=1, test_frc=0, evaluation_frq=0, method='simple' )
+train_set, test_set, evaluation_set = pc.create_train_sets( train_data, train_label_sets, train_frc=1, test_frc=0, evaluation_frq=0, method='simple' )
 
 print "train classifier"
 clf = svm.SVC()
@@ -105,6 +103,9 @@ if(len( test_set )>0):
         test_score = average_precision_score( test_set['labels'], test_prediction )
         print "score: " + str( test_score )
 
+print "clean cache?"
+train_data = None
+train_label_sets = None
 
 ####################################################################################
 ##      This is the classification tast                                           ##
@@ -134,8 +135,7 @@ for message in messages:
         channel.send( message )
 
 item_ids = []
-test_features = []
-
+predicted_scores = []
 
 print "receive data"
 for i in range( len( messages ) ):
@@ -143,22 +143,17 @@ for i in range( len( messages ) ):
         print "Split number " +str(i)+ " received"
         if serialized_data == -1: print "Error with data;" 
         test_data = pickle.loads( serialized_data )
+        print "tidy data"
         item_id, test_feat = pc.tidy_data( [test_data], feature_index = feature_index )
         item_ids.extend( item_id )
-        print "tidy data"
-        test_features.append( test_feat )
-        
+        print "classify"
+        predicted_scores.extend( clf.predict( test_feat ) )
 
 
 group.terminate()
 #test_data = pc.preprocess_data2( file_path+test_file_name, range(sample_size), targets=False )
 
 
-print "classify"
-predicted_scores = []
-for features in test_features:
-        print "set classified"
-        predicted_scores.extend( clf.predict( test_feat ) )
 print "done classifying"
 
 
