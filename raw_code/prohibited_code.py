@@ -13,6 +13,7 @@ from collections import defaultdict
 from nltk.tokenize import RegexpTokenizer
 from nltk import FreqDist
 
+from sklearn.utils import murmurhash3_32
 import scipy.sparse as sp
 
 
@@ -126,14 +127,7 @@ def tidy_data( data_list, label_list=[], feature_index = {} ):
         cur_row = 0
         data = []
 
-        if len( feature_index)==0:
-                feature_index['price'] = 0
-                feature_index['phone'] = 1
-                feature_index['email'] = 2
-                feature_index['urls'] = 3
-                index = 3
-        else:
-                index = len( feature_index )-1
+	max_size = 1000000000
 
         for i in range( len( data_list ) ):
 
@@ -152,35 +146,28 @@ def tidy_data( data_list, label_list=[], feature_index = {} ):
 
                         data.append( sample['price'] )
                         row.append(cur_row)
-                        col.append( feature_index['price'] )
+                        col.append( murmurhash3_32( 'price') % max_size )
 
                         data.append( sample['phone'] )
                         row.append(cur_row)
-                        col.append( feature_index['phone'] )
+                        col.append( murmurhash3_32('phone') % max_size )
 
                         data.append( sample['email'] )
                         row.append(cur_row)
-                        col.append( feature_index['email'] )
+                        col.append( murmurhash3_32('email') % max_size )
 
                         data.append( sample['urls'] )
                         row.append(cur_row)
-                        col.append( feature_index['urls'] )
+                        col.append( murmurhash3_32('urls') % max_size )
 
                         for word, count in sample['words'].iteritems():
-                                if word not in feature_index:
-                                        index += 1
-                                        feature_index[ word ] = index
-                                        
-                                else:
-                                        index = feature_index[ word ]
                                 data.append( count )
                                 row.append( cur_row )
-                                col.append( index )
+                                col.append( murmurhash3_32( word) % max_size )
 
 
                         cur_row += 1
-     
-        features = sp.csr_matrix((data,(row,col)), shape=( max(cur_row,1), 1000000000), dtype=np.float64)
+        features = sp.csr_matrix((data,(row,col)), shape=( max(cur_row,1), max_size), dtype=np.float64)
 
         if targets:
                 return item_ids, features, labels

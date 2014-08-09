@@ -2,7 +2,7 @@
 import prohibited_code as pc
 
 from sklearn import svm
-from sklearn.linear_model import SGDClassifier
+from sklearn.linear_model import Ridge
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import Perceptron
@@ -22,7 +22,7 @@ test_file_name = 'avito_test.tsv'
 train_max_samples = 3995802
 test_max_samples = 1351242
 
-sample_size = 50000
+sample_size = 5000
 
 
 #train
@@ -53,7 +53,7 @@ mch = execnet.MultiChannel( [ channel1, channel2, channel3 ] )
 queue = mch.make_receive_queue( endmarker=-1 )
 channels = itertools.cycle( mch )
 
-num_splits = 10
+num_splits = 4
 
 messages = []
 for i in range( num_splits ):
@@ -69,11 +69,9 @@ for message in messages:
         channel.send( message )
 
 
-feature_index = {}
 item_ids = []
 train_data = None
 train_label_sets=[]
-
 
 print "receive data"
 for i in range( len( messages ) ):
@@ -81,7 +79,7 @@ for i in range( len( messages ) ):
         print "Split number " +str(i)+ " received"
         if serialized_data == -1: print "Error with data;" 
         data, labels = pickle.loads( serialized_data )
-        item_id, train_feat, train_labels = pc.tidy_data( [data], [labels], feature_index = feature_index )
+        item_id, train_feat, train_labels = pc.tidy_data( [data], [labels] )
         item_ids.extend( item_id )
         train_data = pc.csr_vappend( train_data, train_feat )
         train_label_sets.extend( train_labels )
@@ -93,7 +91,7 @@ for i in range( len( messages ) ):
 train_set, test_set, evaluation_set = pc.create_train_sets( train_data, train_label_sets, train_frc=1, test_frc=0, evaluation_frq=0, method='simple' )
 
 print "train classifier"
-clf = svm.SVC()
+clf = Ridge( alpha = -5 )
 
 clf.fit( train_set['data'], train_set['labels'] )
 
@@ -144,7 +142,7 @@ for i in range( len( messages ) ):
         if serialized_data == -1: print "Error with data;" 
         test_data = pickle.loads( serialized_data )
         print "tidy data"
-        item_id, test_feat = pc.tidy_data( [test_data], feature_index = feature_index )
+        item_id, test_feat = pc.tidy_data( [test_data] )
         item_ids.extend( item_id )
         print "classify"
         predicted_scores.extend( clf.predict( test_feat ) )
