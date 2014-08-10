@@ -8,7 +8,7 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import Perceptron
 from sklearn.metrics import average_precision_score
 
-import execnet, remote_preprocess
+import execnet, remote_preprocess, remote_classify
 import cPickle as pickle
 import itertools
 import math
@@ -22,33 +22,25 @@ test_file_name = 'avito_test.tsv'
 train_max_samples = 3995802
 test_max_samples = 1351242
 
-sample_size = 5000
+sample_size = 50000
+train_parallel = False
+classifier_merge = None
 
 
 #train
 print "distributed train"
-preprocessor = pickle.dumps( pc.preprocess_data )
+
+if train_parallel:
+	print "Needs implementation"
+	distribute_pipeline = pc.base_pipeline
+else:
+	distribute_pipeline = pc.base_pipeline
+preprocessor = pickle.dumps( distribute_pipeline )
 
 group = execnet.Group( ['popen']*4 )
 mch = group.remote_exec( remote_preprocess )
 for i in range( len(mch) ):
         mch[i].send( preprocessor )
-
-'''
-gw1 = execnet.makegateway()
-channel1 = gw1.remote_exec( remote_preprocess )
-gw2 = execnet.makegateway()
-channel2 = gw2.remote_exec( remote_preprocess )
-gw3 = execnet.makegateway()
-channel3 = gw3.remote_exec( remote_preprocess )
-
-print "preprocess train"
-channel1.send( preprocessor )
-channel2.send( preprocessor )
-channel3.send( preprocessor )
-mch = execnet.MultiChannel( [ channel1, channel2, channel3 ] )
-'''
-
 
 queue = mch.make_receive_queue( endmarker=-1 )
 channels = itertools.cycle( mch )
@@ -69,41 +61,54 @@ for message in messages:
         channel.send( message )
 
 
-item_ids = []
-train_data = None
-train_label_sets=[]
+clf = None
+if train_parallel:
+	print "needs implementation"
+	print "distribution of training"
+	print "merge classifiers"
+	if classifier_merge == 'average':
+		print "implement average merging"
+	elif classifier_merge == 'vote':
+		print "implement vote merging"
+	else:
+		print "Ooops, invalid merge method"
+	
+else:
+	item_ids = []
+	train_data = None
+	train_label_sets=[]
 
-print "receive data"
-for i in range( len( messages ) ):
-        channel, serialized_data = queue.get( )
-        print "Split number " +str(i)+ " received"
-        if serialized_data == -1: print "Error with data;" 
-        data, labels = pickle.loads( serialized_data )
-        item_id, train_feat, train_labels = pc.tidy_data( [data], [labels] )
-        item_ids.extend( item_id )
-        train_data = pc.csr_vappend( train_data, train_feat )
-        train_label_sets.extend( train_labels )
-  
-#train_data, labels = pc.preprocess_data2( file_path+train_file_name, range(sample_size), targets=True )
+	print "receive data"
+	for i in range( len( messages ) ):
+		channel, serialized_data = queue.get( )
+		print "Split number " +str(i)+ " received"
+		if serialized_data == -1: print "Error with data;" 
+		item_id, train_feat, train_labels = pickle.loads( serialized_data )
+		item_ids.extend( item_id )
+		train_data = pc.csr_vappend( train_data, train_feat )
+		train_label_sets.extend( train_labels )
+	  
+	#train_data, labels = pc.preprocess_data2( file_path+train_file_name, range(sample_size), targets=True )
 
 
 
-train_set, test_set, evaluation_set = pc.create_train_sets( train_data, train_label_sets, train_frc=1, test_frc=0, evaluation_frq=0, method='simple' )
+	train_set, test_set, evaluation_set = pc.create_train_sets( train_data, train_label_sets, train_frc=1, test_frc=0, evaluation_frq=0, method='simple' )
 
-print "train classifier"
-clf = Ridge( alpha = -5 )
+	print "train classifier"
+	#clf = svm.SVC()
 
-clf.fit( train_set['data'], train_set['labels'] )
+	#clf.fit( train_set['data'], train_set['labels'] )
 
-if(len( test_set )>0):
-        print "evaluate classifier"
-        test_prediction = clf.predict( test_set['data'] )
-        test_score = average_precision_score( test_set['labels'], test_prediction )
-        print "score: " + str( test_score )
+	if(len( test_set )>0):
+		print "evaluate classifier"
+		test_prediction = clf.predict( test_set['data'] )
+		test_score = average_precision_score( test_set['labels'], test_prediction )
+		print "score: " + str( test_score )
 
-print "clean cache?"
-train_data = None
-train_label_sets = None
+
+
+group.terminate()
+
 
 ####################################################################################
 ##      This is the classification tast                                           ##
@@ -111,6 +116,20 @@ train_label_sets = None
 
 #test
 print "test"
+
+classifier_pipeline = pickle.dumps( pc.classify_pipeline )
+classifier = pickle.dumps( clf ) 
+
+group = execnet.Group( ['popen']*4 )
+mch = group.remote_exec( remote_classify )
+for i in range( len(mch) ):
+        mch[i].send( classifier )
+	mch[i].send( classifier_pipeline )
+
+queue = mch.make_receive_queue( endmarker=-1 )
+channels = itertools.cycle( mch )
+
+
 
 print "preprocess test"
 
@@ -140,15 +159,12 @@ for i in range( len( messages ) ):
         channel, serialized_data = queue.get( )
         print "Split number " +str(i)+ " received"
         if serialized_data == -1: print "Error with data;" 
-        test_data = pickle.loads( serialized_data )
-        print "tidy data"
-        item_id, test_feat = pc.tidy_data( [test_data] )
+        item_id, prediction = pickle.loads( serialized_data )
         item_ids.extend( item_id )
+	predicted_scores.extend( prediction )
         print "classify"
-        predicted_scores.extend( clf.predict( test_feat ) )
 
 
-group.terminate()
 #test_data = pc.preprocess_data2( file_path+test_file_name, range(sample_size), targets=False )
 
 
@@ -158,5 +174,5 @@ print "done classifying"
 solution =  pc.sort_solution( item_ids, predicted_scores )
 
 solution_file_name = '../../data/data/solution' + datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S") + '.csv'
-pc.write_solution( solution_file_name, solution )
+#pc.write_solution( solution_file_name, solution )
 

@@ -111,7 +111,7 @@ def preprocess_data( file_name, number_items, start_pos=0, targets=False, _filte
 
 
 
-def tidy_data( data_list, label_list=[], feature_index = {} ):
+def tidy_data( data_list, label_list=[] ):
 
         targets = len( label_list ) >0
         
@@ -173,7 +173,24 @@ def tidy_data( data_list, label_list=[], feature_index = {} ):
                 return item_ids, features, labels
         else:
                 return item_ids, features
-                        
+   
+
+
+def base_pipeline( file_name, number_items, start_pos=0, targets=False, _filter=[] ):
+	preprocessed_data = preprocess_data( file_name, number_items, start_pos, targets, _filter )
+	if targets:	
+		tight_data = tidy_data( [ preprocessed_data[0] ], [ preprocessed_data[1] ] )
+	else:
+		tight_data = tidy_data( [ preprocessed_data ] )
+	return tight_data
+
+
+def classify_pipeline( clf, file_name, number_items, start_pos=0, _filter=[] ):
+	item_id, features = base_pipeline( file_name, number_items, start_pos, False, _filter )
+	prediction = clf.predict( features )
+	return item_id, prediction
+
+                     
 def csr_vappend(a,b):
     	""" Takes in 2 csr_matrices and appends the second one to the bottom of the first one. 
     	Much faster than scipy.sparse.vstack but assumes the type to be csr and overwrites
