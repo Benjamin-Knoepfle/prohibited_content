@@ -62,6 +62,9 @@ def preprocess_data( file_name, number_items, start_pos=0, targets=False, _filte
         """ Processing data. """
         print " Processing data. "
 
+        fifty_fifty = 'fifty_fifty' in _filter and targets
+        ham_count = 1
+
         items_list = []
         samples = []
         labels = []
@@ -71,6 +74,15 @@ def preprocess_data( file_name, number_items, start_pos=0, targets=False, _filte
 
         for processed_cnt, item in data.iterrows():
                 
+                if fifty_fifty:
+                        if item.is_blocked == 0 and ham_count > 0:
+                                ham_count -= 1
+                        elif item.is_blocked == 0 and ham_count == 0:
+                                continue
+                        elif item.is_blocked == 1:
+                                ham_count += 1
+
+
                 features_category = item['category']
                 features_subcategory = item['subcategory']
                 features_title = item['title']
@@ -99,12 +111,14 @@ def preprocess_data( file_name, number_items, start_pos=0, targets=False, _filte
                 
                 samples.append( features )
 
+                if targets:
+                        labels.append( item.is_blocked )
+
 
                 if processed_cnt%1000 == 0:
                         print str(processed_cnt)+" items processed"
 
         if targets:
-                labels = data.is_blocked
                 return samples, labels
         else:
                 return samples
@@ -127,7 +141,7 @@ def tidy_data( data_list, label_list=[] ):
         cur_row = 0
         data = []
 
-	max_size = 1000000000
+	max_size = 999331 #39916801
 
         for i in range( len( data_list ) ):
 
