@@ -13,6 +13,7 @@ from collections import defaultdict
 from nltk.tokenize import RegexpTokenizer
 from nltk import FreqDist
 
+import sklearn
 from sklearn.utils import murmurhash3_32
 import scipy.sparse as sp
 
@@ -75,11 +76,11 @@ def preprocess_data( file_name, number_items, start_pos=0, targets=False, _filte
         for processed_cnt, item in data.iterrows():
                 
                 if fifty_fifty:
-                        if item.is_blocked == 0 and ham_count > 0:
+                        if item['is_blocked'] == 0 and ham_count > 0:
                                 ham_count -= 1
-                        elif item.is_blocked == 0 and ham_count == 0:
+                        elif item['is_blocked'] == 0 and ham_count == 0:
                                 continue
-                        elif item.is_blocked == 1:
+                        elif item['is_blocked'] == 1:
                                 ham_count += 1
 
 
@@ -112,7 +113,7 @@ def preprocess_data( file_name, number_items, start_pos=0, targets=False, _filte
                 samples.append( features )
 
                 if targets:
-                        labels.append( item.is_blocked )
+                        labels.append( item['is_blocked'] )
 
 
                 if processed_cnt%1000 == 0:
@@ -201,7 +202,12 @@ def base_pipeline( file_name, number_items, start_pos=0, targets=False, _filter=
 
 def classify_pipeline( clf, file_name, number_items, start_pos=0, _filter=[] ):
 	item_id, features = base_pipeline( file_name, number_items, start_pos, False, _filter )
-	prediction = clf.predict( features )
+	
+	if type(clf)== sklearn.naive_bayes.MultinomialNB: 
+		prediction_probs = clf.predict_log_proba( features )
+		prediction = prediction_probs[:,1]-prediction_probs[:,0]
+	else:
+		prediction = clf.predict( features )
 	return item_id, prediction
 
                      

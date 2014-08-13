@@ -11,8 +11,8 @@ if __name__ == '__channelexec__':
                         file_name = param[0]
                         sample_size = param[1]
                         start_pos = param[2]
-                        targets = param[3]
-                        classified = classifier( clf, file_name, sample_size, start_pos, targets )
+			_filter = param[3]
+                        classified = classifier( clf, file_name, sample_size, start_pos, _filter )
                         serialized_classified = pickle.dumps( classified )
                         channel.send( serialized_classified )
         except( BaseException ):
